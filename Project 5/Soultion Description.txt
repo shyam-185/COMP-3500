@@ -1,0 +1,47 @@
+Soultions 
+Shyam Patel     sjp0059
+
+7.1
+(1) How did you separate scheduling mechanism from scheduling policies?
+    I created a method called TaskManager who manages user inputs and picks a scheduling policy based on that.
+
+(2) How did implement the three scheduling algorithms?
+    I created 3 different methods, one for each algorithm that is called upon based on what the input is.'
+    For example, when the input is "./scheduler task.list FCFS#" then the first come fist serve policy is called.
+
+(3) How did you calculate waiting times?
+    In class we learned that waiting time = finish time - (arrival time + burst time), I implemented this into program
+
+(4) How did you calculate response times?
+    In class we learned that response time = start time - arrival time, I implemented this into program
+
+(5) How did you calculate turnaround times?
+    In class we learned that turnaround time = finish time - arrival time, I implemented this into program
+
+(6) How did you implement the command-line parser?
+    I used int argc and char *argv[] to pass in a variable number of command line arguments into the main method of the code.
+    From there I determined if the arguments were valid and then ran the program.
+
+7.2
+(1) How general is your solution?
+    All the files except the schduler.c and scheduler.h are found in the canvas, so those were pretty simple to understand.
+    The scheduler.c file was quite long so I am sure it can be made with less code, but it is easy to follow.
+
+(2) How easy would it be to add a new scheduling policy into your scheduler?
+    It would be easy as all the other policies are in their own methods, so just create a new method in scheduler.c
+    and add the header to scheduler.h.
+
+(3) Does your program offer input error checking? 
+    Yes, the main method determines if the correct number of arguments are given for the program and TaskManager validates that
+    the policy given in the input is one of the three policys implemented.
+
+7.3
+(1) Is your code elegant or readable?
+    Yes, it is very straightforward to follow and properly spaced out, avoiding lumped up lines of code.
+
+(2) How innovative is your solution? Did you try any ideas not suggested here?
+    I tried to make the code as legible as possible but also try and develope code that will take in all possibilites the user inputs.
+
+(3) Did you document all outside sources?
+    I used the files found on canvas tha Dr.Qin published to the class, those files included open, read, print, command, input, README.
+    I cited that in the comments of my files.

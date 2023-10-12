@@ -1,0 +1,443 @@
+diff --git a/kern/asst1/catsem.c b/kern/asst1/catsem.c
+index dcb257b..b358ba2 100644
+--- a/kern/asst1/catsem.c
++++ b/kern/asst1/catsem.c
+@@ -18,7 +18,7 @@
+ #include <lib.h>
+ #include <test.h>
+ #include <thread.h>
+-
++#include <synch.h>
+ 
+ /*
+  * 
+@@ -26,24 +26,36 @@
+  *
+  */
+ 
++typedef enum {false, true} bool;
++
+ /*
+  * Number of food bowls.
+  */
+ 
+ #define NFOODBOWLS 2
+ 
++volatile bool all_dishes_available;
++static struct semaphore *mutex;
++static struct semaphore *dish_mutex;
++static struct semaphore *done;
++
+ /*
+- * Number of cats.
++ *  Number of cats.
+  */
+ 
+ #define NCATS 6
++static struct semaphore *cats_queue;
++volatile int cats_wait_count;
++volatile bool no_cat_eat;
+ 
+ /*
+  * Number of mice.
+  */
+ 
+ #define NMICE 2
+-
++static struct semaphore *mice_queue;
++volatile int mice_wait_count;
++volatile bool no_mouse_eat;
+ 
+ /*
+  * 
+@@ -51,6 +63,18 @@
+  * 
+  */
+ 
++//Names gotten from handouts and class lectures and created based on actions
++static void cats_enter_kitchen(bool first_cat_eat, bool another_cat_eat);
++static void cat_eats_dish(unsigned long catnumber, int mydish, bool dish1_busy, bool dish2_busy);
++static void mouse_enter_kitchen(bool first_mouse_eat, bool another_mouse_eat);
++static void mouse_eats_dish(unsigned long mousenumber, int mydish, bool dish1_busy, bool dish2_busy);
++static void mouse_release_dishes(int mydish, bool dish1_busy, bool dish2_busy);
++static void mouse_switch_turn(bool first_mouse_eat, bool another_mouse_eat);
++
++static void release_dishes(int mydish, bool dish1_busy, bool dish2_busy);
++static void switch_turn(bool first_cat_eat, bool another_cat_eat);
++static void setup();
++static void cleanup();
+ 
+ /*
+  * catsem()
+@@ -76,8 +100,26 @@ catsem(void * unusedpointer,
+          * Avoid unused variable warnings.
+          */
+ 
++	//skip warnings
+         (void) unusedpointer;
+         (void) catnumber;
++
++	// Cats currently eating and dishes currently being used
++	bool first_cat_eat = false;
++	bool another_cat_eat = false;
++	bool dish1_busy = false;
++        bool dish2_busy = false;
++        int mydish;
++
++	//Check if cat is in the kitchen
++ 	cats_enter_kitchen(first_cat_eat, another_cat_eat);
++        kprintf("Cat %d is in the kitchen.\n", catnumber);
++
++	//check if cat eats from the dish
++        cat_eats_dish(catnumber, mydish, dish1_busy, dish2_busy);
++        release_dishes(mydish, dish1_busy, dish2_busy);
++        
++        switch_turn(first_cat_eat, another_cat_eat);
+ }
+         
+ 
+@@ -108,6 +150,25 @@ mousesem(void * unusedpointer,
+ 
+         (void) unusedpointer;
+         (void) mousenumber;
++
++	// Cats currently eating  and dishes being used
++        bool first_mouse_eat = false;
++        bool another_mouse_eat = false;
++        bool dish1_busy = false;
++        bool dish2_busy = false;
++        int mydish;
++
++	//Check to see if mouse has entered the kitchen
++        mouse_enter_kitchen(first_mouse_eat, another_mouse_eat);
++        kprintf("Mouse %d is in the kitchen.\n", mousenumber);
++
++	//Check to see if the mouse has eaten from the dish
++        mouse_eats_dish(mousenumber, mydish, dish1_busy, dish2_busy);
++        mouse_release_dishes(mydish, dish1_busy, dish2_busy);
++        
++        mouse_switch_turn(first_mouse_eat, another_mouse_eat);
++
++
+ }
+ 
+ 
+@@ -142,6 +203,7 @@ catmousesem(int nargs,
+         /*
+          * Start NCATS catsem() threads.
+          */
++	setup();
+ 
+         for (index = 0; index < NCATS; index++) {
+            
+@@ -188,10 +250,293 @@ catmousesem(int nargs,
+                               );
+                 }
+         }
++	
++	//wait for cats and mice to come
++	while (cats_wait_count > 0 || mice_wait_count > 0);
++	cleanup();
+ 
+         return 0;
+ }
+ 
++static void setup() {
++ 
++        all_dishes_available = true;
++ 
++        done = sem_create("done", 0);
++        mutex = sem_create("mutex", 1);
++        dish_mutex = sem_create("dish_mutex", 1);
++
++        cats_queue = sem_create("cats", 0);
++        mice_queue = sem_create("mice", 0);
++        
++        cats_wait_count = 0;
++        no_cat_eat = true;
++        mice_wait_count = 0;
++        no_mouse_eat = true;
++}
++
++static void cleanup() {
++ 
++        sem_destroy(done);
++        sem_destroy(mutex);
++        sem_destroy(dish_mutex);
++        sem_destroy(cats_queue);
++        sem_destroy(mice_queue);
++ 
++        done = NULL;
++        mutex = NULL;
++        dish_mutex = NULL;
++        cats_queue = NULL;
++        mice_queue = NULL;
++}
++
++static void switch_turn(bool first_cat_eat, bool another_cat_eat) {
++
++	//Check status of both cats
++        if (first_cat_eat  == true) {
++
++                if (another_cat_eat  == true) {
++                        P(done);
++                }
++
++                kprintf("First cat is leaving.\n");
++
++		//wake up the cats and mice
++                P(mutex);
++                no_cat_eat = true;
++
++                if (mice_wait_count > 0) {
++                        V(mice_queue);
++                } else {
++                        if (cats_wait_count > 0) {
++                                V(cats_queue);
++                        } else {
++                                all_dishes_available = true;
++                        }
++                }
++
++                V(mutex);
++
++	//Status of second cat
++        } else {
++                kprintf("Second cat is leaving.\n");
++                V(done);
++
++                P(mutex);
++                no_cat_eat = true;
++
++		//wake up the cats and mice
++                if (mice_wait_count > 0) {
++                        V(mice_queue);
++                } else {
++                        if (cats_wait_count > 0) {
++                                V(cats_queue);
++                        } else {
++                                all_dishes_available = true;
++                        }
++                }
++
++                V(mutex);
++        }
++}
++
++static void release_dishes(int mydish, bool dish1_busy, bool dish2_busy) {
++
++        //Release the dishes
++        P(dish_mutex);
++
++        if (mydish == 1) {
++                assert(dish1_busy);
++                dish1_busy = false;
++        } else {
++                assert(dish2_busy);
++                dish2_busy = false;
++        }
++
++        V(dish_mutex);
++        P(mutex);
++        cats_wait_count--;
++        V(mutex);
++}
++
++static void cats_enter_kitchen(bool first_cat_eat, bool another_cat_eat) {
++
++        P(mutex);
++	
++	//Allow the first cat to enter
++        if (all_dishes_available == true) {
++                all_dishes_available = false;
++                V(cats_queue);
++        }
++        cats_wait_count++;
++        V(mutex);
++
++        // Make the other cats wait
++        P(cats_queue);
++
++        if (no_cat_eat == true) {
++                no_cat_eat = false;
++                first_cat_eat = true;
++        } else {
++                first_cat_eat = false;
++        }
++
++        // After the first cat, let another cat in
++        if (first_cat_eat == true) {
++
++                P(mutex);
++                if (cats_wait_count > 1) {
++                        another_cat_eat = true;
++                        V(cats_queue);
++                }
++                V(mutex);
++        }
++}
++
++static void mouse_enter_kitchen(bool first_mouse_eat, bool another_mouse_eat){
++
++        P(mutex);
++
++	//Allow the first mouse to enter
++        if (all_dishes_available == true) {
++                all_dishes_available = false;
++                V(mice_queue);
++        }
++        cats_wait_count++;
++        V(mutex);
++
++        //Make the other mouse wait
++        P(mice_queue);
++
++        if (no_mouse_eat == true) {
++                no_mouse_eat = false;
++                first_mouse_eat = true;
++        } else {
++                first_mouse_eat = false;
++        }
++
++        //After the first mouse, let the second mouse in
++        if (first_mouse_eat == true) {
++
++                P(mutex);
++                if (mice_wait_count > 1) {
++                        another_mouse_eat = true;
++                        V(mice_queue);
++                }
++                V(mutex);
++        }
++}
++
++static void cat_eats_dish(unsigned long catnumber, int mydish, bool dish1_busy, bool dish2_busy) {
++
++        // Cat is assigned a dish
++        P(mutex);
++        if (dish1_busy == false) {
++                dish1_busy = true;
++                mydish = 1;
++        } else {
++                assert(dish2_busy == false);
++                dish2_busy = true;
++                mydish = 2;
++        }
++        V(mutex);
++
++        // Cat eats a dish
++        kprintf("Cat %d eating dish %d.\n", catnumber, mydish);
++        clocksleep(1);
++        kprintf("Cat %d finish eating dish %d.\n", catnumber, mydish);
++}
++
++static void mouse_eats_dish(unsigned long mousenumber, int mydish, bool dish1_busy, bool dish2_busy){
++
++        //Mouse is assigned a dish
++        P(mutex);
++
++        if (dish1_busy == false) {
++                dish1_busy = true;
++                mydish = 1;
++        } else {
++                assert(dish2_busy == false);
++                dish2_busy = true;
++                mydish = 2;
++        }
++        V(mutex);
++
++        // Mouse eats a dish
++        kprintf("Mouse %d eating dish %d.\n", mousenumber, mydish);
++        clocksleep(1);
++        kprintf("Mouse %d finish eating dish %d.\n", mousenumber, mydish);
++}
++
++static void mouse_release_dishes(int mydish, bool dish1_busy, bool dish2_busy){
++
++        // Release dishes
++        P(dish_mutex);
++
++        if (mydish == 1) {
++                assert(dish1_busy);
++                dish1_busy = false;
++        } else {
++                assert(dish2_busy);
++                dish2_busy = false;
++        }
++        V(dish_mutex);
++
++        P(mutex);
++        mice_wait_count--;
++        V(mutex);
++}
++
++static void mouse_switch_turn(bool first_mouse_eat, bool another_mouse_eat){
++
++	//empty the kitchen of mice
++        if (first_mouse_eat == true) {
++
++                if (another_mouse_eat == true) {
++                        P(done);
++                }
++
++                kprintf("First mouse is leaving.\n");
++
++                P(mutex);
++                no_mouse_eat = true;
++		
++		//wake up cats or mice
++                if (cats_wait_count > 0) {
++                        
++                        V(cats_queue);
++                } else {
++                        if (mice_wait_count > 0) {
++                                V(mice_queue);
++                        } else {
++                                all_dishes_available = true;
++                        }
++                }
++
++                V(mutex);
++        } else {
++                kprintf("Second mouse is leaving.\n");
++                V(done);
++
++                P(mutex);
++                no_mouse_eat = true;
++
++                if (cats_wait_count > 0) {
++                        // wakeup cats
++                        V(cats_queue);
++                } else {
++                        if (mice_wait_count > 0) {
++                                // wakeup mice (there shouldn't be any left though)
++                                V(mice_queue);
++                        } else {
++                                all_dishes_available = true;
++                        }
++                }
++
++                V(mutex);
++        }
++}
++
+ 
+ /*
+  * End of catsem.c
+diff --git a/kern/asst1/exercises.txt b/kern/asst1/exercises.txt
+new file mode 100644
+index 0000000..8daa3c6
+--- /dev/null
++++ b/kern/asst1/exercises.txt
+@@ -0,0 +1,11 @@
++Shyam Patel
++
++Option 1
++
++Explain how to avoid starvation in your implementation.
++	I avoided starvation by implementing critical sections, as explained by Dr. Qin in class. Critical sections allow for me to 'lock' variables through the use of semaphores which include 	wait and signal to lock and unlock variables so that the code will not enter a 'deadlock' and then no cats or mice will starve.
++
++Comment on your experience of implementing the Cats-and-Mice program. Can you derive any principles about the use of the semaphore synchronization primitives?
++	This programming exercise was quite technically hard, I got stuck a lot and relied on discussions with friends and online resources to help implement critical sections.
++	Although semaphores are basic and really easy to understand, implementing them in the program took a while to understand. wait and signal were very easy to implement but, when you get
++	so many nested loops with the threads, it becomes very easy to get lost.

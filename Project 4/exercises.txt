@@ -1,0 +1,11 @@
+Shyam Patel
+
+Option 1
+
+Explain how to avoid starvation in your implementation.
+	I avoided starvation by implementing critical sections, as explained by Dr. Qin in class. Critical sections allow for me to 'lock' variables through the use of semaphores which include 	wait and signal to lock and unlock variables so that the code will not enter a 'deadlock' and then no cats or mice will starve.
+
+Comment on your experience of implementing the Cats-and-Mice program. Can you derive any principles about the use of the semaphore synchronization primitives?
+	This programming exercise was quite technically hard, I got stuck a lot and relied on discussions with friends and online resources to help implement critical sections.
+	Although semaphores are basic and really easy to understand, implementing them in the program took a while to understand. wait and signal were very easy to implement but, when you get
+	so many nested loops with the threads, it becomes very easy to get lost.

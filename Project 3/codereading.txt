@@ -1,0 +1,35 @@
+Shyam Patel	sjp0059
+
+1)What happens to a thread when it exits (i.e., calls thread_exit() )? What about when it sleeps?
+	When a thread exits, it removes the virtual memory space and decrements the counter. When a thread sleeps it yields control to the next thread 
+	and takes control again when wakeup() is called.
+
+2)What function(s) handle(s) a context switch?
+	mi_switch and md_switch.
+
+3)How many thread states are there? What are they? 
+	4. The thread states are: S_RUN, S_READY, S_SLEEP, S_ZOMBIE
+
+4)What does it mean to turn interrupts off? How is this accomplished? Why is it important to turn off interrupts in the thread subsystem code?   
+	Turning interrupts off prevents the handler from being called. It is turned off by using the function splhigh. It is important because it ensures 
+	threads complete successfully without being broken mid-execution.
+
+5)What happens when a thread wakes up another thread? How does a sleeping thread get to run again?
+	When a thread wakes up andother thread, it removes the sleeping thread from the queue and calls make_runnable on the thread. 
+	The thread gets to run again when an mi_switch is called.
+
+6)What function is responsible for choosing the next thread to run? 
+	scheduler(void)
+
+7)How does that function pick the next thread?
+	It schedules each thread in an equal time-slice.
+
+8)What role does the hardware timer play in scheduling? What hardware independent function is called on a timer interrupt?
+	The hardware timer calls the hardlock method and thread_yield function is called on a timer interrupt.
+
+9)Describe how thread_sleep() and thread_wakeup() are used to implement semaphores. What is the purpose of the argument passed to thread_sleep()?
+	Thread_sleep and thread_wakeup are used to implement semaphores by treating a sleeping thread as a lock and a thread_wakeup call as a release.
+	The purpose of the argument passed to thread_sleep allows thread_wakeup to wake theads by their sleep address which is used to identify the threads.
+
+10)Why does the lock API in OS/161 provide lock_do_i_hold(), but not lock_get_holder()? 
+	The lock API in OS/161 does not provide lock_get_holder because locks have to be released by the same thread that acquires them.  
